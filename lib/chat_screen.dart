@@ -8,7 +8,7 @@ import 'main.dart'; // kPrimaryColor için
 // =================================================================
 // API anahtarınızı buraya yerleştirin
 // =================================================================
-const String GEMINI_API_KEY = "AIzaSyBB7cgoaO_G1gzj9qMwWbp28XEUBx-VK04";
+const String GEMINI_API_KEY = "AIzaSyDNitBfWzg5j4F25b497LUeYI0o1N4NWj4";
 
 class ChatScreen extends StatefulWidget {
   final int biletId;

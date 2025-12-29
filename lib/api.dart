@@ -1,77 +1,59 @@
-// lib/api.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:siralamahastane/leaderboard_model.dart';
+
+// اگر فایل api.dart مستقیماً داخل پوشه lib است، این خط باید کار کند
+import '../leaderboard_model.dart';
 
 class ApiService {
-  // آدرس پایه سرور (برای شبیه‌ساز اندروید 10.0.2.2 است)
+  // برای شبیه‌ساز اندروید آدرس 10.0.2.2 صحیح است
   static const String baseUrl = "http://10.0.2.2:8000";
 
-  /// 1. ثبت امتیاز بازی (POST)
+  // -----------------------------
+  // ارسال امتیاز بازی
+  // -----------------------------
   static Future<bool> sendScore({
     required int hastaid,
     required String oyunadi,
     required int skor,
   }) async {
-    final url = Uri.parse("$baseUrl/api/oyun/skor");
-
-    final body = {
-      "hastaid": hastaid,
-      "oyunadi": oyunadi,
-      "skor": skor,
-    };
-
-    // برای دیباگ: نمایش اطلاعات ارسالی در کنسول
-    print("📤 API → /api/oyun/skor");
-    print("Gönderilen JSON: ${jsonEncode(body)}");
-
     try {
       final response = await http.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode(body),
+        Uri.parse('$baseUrl/api/oyun/skor'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'hastaid': hastaid,
+          'oyunadi': oyunadi,
+          'skor': skor,
+        }),
       );
 
-      print("📥 API CEVABI (${response.statusCode}): ${response.body}");
-
-      if (response.statusCode == 200) {
-        print("✔️ Skor başarıyla kaydedildi.");
-        return true;
-      } else {
-        print("❌ Skor kaydedilemedi. Kod: ${response.statusCode}");
-        return false;
-      }
-    } catch (e) {
-      print("🔥 Ağ hatası: $e");
+      return response.statusCode == 200;
+    } catch (e) { // اصلاح شد: استفاده از e به جای _
+      print("Error sending score: $e");
       return false;
     }
   }
 
-  /// 2. دریافت لیست برترین‌ها (GET)
-  static Future<List<dynamic>> getLeaderboard(String gameName) async {
+  // -----------------------------
+  // دریافت Leaderboard (TYPE SAFE)
+  // -----------------------------
+  static Future<List<LeaderboardModel>> getLeaderboard(String gameName) async {
     try {
-      // نام بازی ممکن است فاصله داشته باشد، آن را encode می‌کنیم
       final encodedGameName = Uri.encodeComponent(gameName);
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/oyun/liderler/$encodedGameName'),
+      );
 
-      // ساخت آدرس کامل API
-      final url = Uri.parse('$baseUrl/api/oyun/liderler/$encodedGameName');
+      if (response.statusCode != 200) return [];
 
-      print("📤 GET Leaderboard: $url");
+      final List<dynamic> decoded = jsonDecode(utf8.decode(response.bodyBytes));
 
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        // تبدیل بدنه پاسخ به لیست (با پشتیبانی از حروف ترکی/فارسی utf8)
-        final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        print("📥 Leaderboard Data: $data");
-        return data;
-      } else {
-        print("❌ Leaderboard hatası: ${response.statusCode}");
-        return [];
-      }
-    } catch (e) {
-      print("🔥 Bağlantı hatası: $e");
+      return decoded
+          .map((e) => LeaderboardModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) { // اصلاح شد
+      print("Error getting leaderboard: $e");
       return [];
     }
   }

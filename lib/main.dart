@@ -3,61 +3,35 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'chat_screen.dart'; // اضافه شد
+import 'chat_screen.dart';
 import 'game_screen.dart';
-
+import 'app_theme.dart';
+import 'home_screen.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-// ----------------- Theme -----------------
-const Color kPrimaryColor = Color(0xFF3B82F6);
-const Color kSecondaryColor = Color(0xFF10B981);
-const Color kBackgroundColor = Color(0xFFF4F7FC);
-const Color kInputBackgroundColor = Colors.white;
-
+// ----------------- App Entry Point -----------------
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MESS Projesi',
-      theme: ThemeData(
-        primaryColor: kPrimaryColor,
-        scaffoldBackgroundColor: kBackgroundColor,
-        fontFamily: 'Roboto',
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kPrimaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: kPrimaryColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: kInputBackgroundColor,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          hintStyle: TextStyle(color: Colors.grey[400]),
-        ),
-      ),
-      home: const GirisScreen(),
+      title: 'Hastane Randevu',
+      theme: CalmTheme.lightTheme,
+      home: const QueueTrackingEntryScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
+
+// Legacy color constants for backward compatibility with existing screens
+const Color kPrimaryColor = CalmColors.medicalBlue;
+const Color kSecondaryColor = CalmColors.mintGreen;
+const Color kBackgroundColor = CalmColors.softGray;
+const Color kInputBackgroundColor = CalmColors.pureWhite;
+
 
 // ----------------- GirisScreen (Login) -----------------
 class GirisScreen extends StatefulWidget {
@@ -339,6 +313,51 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
     }
   }
 
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.logout_rounded, color: Color(0xFFFF6B6B)),
+            ),
+            const SizedBox(width: 12),
+            const Text("Çıkış Yap"),
+          ],
+        ),
+        content: const Text("Oturumunuzu kapatmak istediğinizden emin misiniz?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              // Replace entire stack with fresh login screen (clears form fields)
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const QueueTrackingEntryScreen()),
+                (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B6B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Çıkış Yap"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String durum = "${widget.biletDetay['durum']}";
@@ -356,181 +375,211 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text("Sıra Takibi"),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2C3E50),
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFFF6B6B)),
+            tooltip: 'Çıkış Yap',
+            onPressed: () => _showLogoutDialog(),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                // --- تغییر از اینجا شروع می‌شود ---
-                child: SingleChildScrollView( // ۱. این ویجت اضافه شد
-                  scrollDirection: Axis.horizontal, // ۲. جهت اسکرول افقی شد
-                  child: Row(
-                    children: [
-                      const Text("Ertelenecek Süre: ", style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      _delayButton(15),
-                      const SizedBox(width: 8),
-                      _delayButton(30),
-                      const SizedBox(width: 8),
-                      _delayButton(45),
-                      const SizedBox(width: 12),
-                      if (_selectedDelayMinutes != null)
-                        Text("Seçildi: ${_selectedDelayMinutes} dk", style: const TextStyle(color: Colors.black54)),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            children: [
+              // ═══════════════════════════════════════════════════════════
+              // DELAY SECTION - Modern Redesign
+              // ═══════════════════════════════════════════════════════════
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF1976D2).withOpacity(0.1),
+                      const Color(0xFFE3F2FD),
                     ],
                   ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF1976D2).withOpacity(0.15)),
                 ),
-                // --- پایان تغییر ---
-              ),
-            ),
-            Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    Text(
-                      durum.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: kPrimaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildStatColumn("Mevcut Sıra", mevcutSira.toString()),
-                        _buildStatColumn("Sizin Numaranız", sizinNumaraniz.toString()),
-                        _buildStatColumn("Kalan Hasta", kalanHasta.toString()),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _buildInfoRow("Bölüm", widget.bolumAdi),
-                    _buildInfoRow("Doktor", doktorAdi),
-                    _buildInfoRow("Giriş Zamanı", formattedGirisZamani),
-                    _buildInfoRow("Tahmini Bekleme Süresi", tahminiSure),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              color: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Mevcut: $mevcutSira", style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Sizin Numaranız: $sizinNumaraniz", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1976D2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.schedule_rounded, color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text("Sıranızı Erteleyin", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50))),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text("Kalan Hasta: $kalanHasta", style: const TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: progressValue,
-                      minHeight: 10,
-                      backgroundColor: Colors.grey[200],
-                      valueColor: const AlwaysStoppedAnimation(kPrimaryColor),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _buildModernDelayButton(15)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _buildModernDelayButton(30)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _buildModernDelayButton(45)),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 10),
 
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatScreen(
-                      biletId: widget.biletId,
-                      bolumAdi: widget.bolumAdi,
+              // STATUS CARD - Compact
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Status Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF1976D2), Color(0xFF42A5F5)]),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          durum.toUpperCase(),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Stats Row
+                      Row(
+                        children: [
+                          Expanded(child: _buildModernStatCard("Mevcut", mevcutSira.toString(), const Color(0xFF26A69A))),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildModernStatCard("Numaranız", sizinNumaraniz.toString(), const Color(0xFF1976D2))),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildModernStatCard("Kalan", kalanHasta.toString(), const Color(0xFFFF9800))),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      // Info Rows
+                      _buildModernInfoRow(Icons.local_hospital_rounded, "Bölüm", widget.bolumAdi),
+                      _buildModernInfoRow(Icons.person_rounded, "Doktor", doktorAdi),
+                      _buildModernInfoRow(Icons.access_time_rounded, "Giriş", formattedGirisZamani),
+                      _buildModernInfoRow(Icons.hourglass_bottom_rounded, "Bekleme", tahminiSure),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // ACTION BUTTONS - Compact Row
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreen(
+                                biletId: widget.biletId,
+                                bolumAdi: widget.bolumAdi,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1976D2),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.description_rounded, size: 18),
+                            SizedBox(width: 6),
+                            Text("Ön Bilgi Formu", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.description_outlined),
-                  SizedBox(width: 8),
-                  Text(" Ön Bilgi Formu Doldur "),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                final dynamic rawHastaId = widget.biletDetay['hastaid'];
-                final int? hastaId = (rawHastaId is int)
-                    ? rawHastaId
-                    : int.tryParse(rawHastaId.toString());
-
-                if (hastaId == null || hastaId == 0) {
-                  print("❌ HATA: Geçerli bir HastaID bulunamadı!");
-                  print("➡️ Gelen bilet verileri:");
-                  print(widget.biletDetay);
-                  return;
-                }
-
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => GameMenuScreen(hastaId: hastaId),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final dynamic rawHastaId = widget.biletDetay['hastaid'];
+                          final int? hastaId = (rawHastaId is int) ? rawHastaId : int.tryParse(rawHastaId.toString());
+                          if (hastaId == null || hastaId == 0) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => GameMenuScreen(hastaId: hastaId)),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFA8E6CF),
+                          foregroundColor: const Color(0xFF2C3E50),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.sports_esports_rounded, size: 18),
+                            SizedBox(width: 4),
+                            Text("Oyun", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kSecondaryColor,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.gamepad_outlined),
-                  SizedBox(width: 8),
-                  Text("Oyun Oyna"),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _delayButton(int minutes) {
+  // Modern delay button
+  Widget _buildModernDelayButton(int minutes) {
     final bool selected = _selectedDelayMinutes == minutes;
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: selected ? kPrimaryColor : Colors.white,
-        foregroundColor: selected ? Colors.white : Colors.black,
-        elevation: selected ? 4 : 0,
-        side: BorderSide(color: kPrimaryColor.withOpacity(0.7)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      ),
-      onPressed: _isErteleLoading ? null : () async {
+    return GestureDetector(
+      onTap: _isErteleLoading ? null : () async {
         setState(() {
           if (_selectedDelayMinutes == minutes) {
             _selectedDelayMinutes = null;
@@ -540,16 +589,39 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
         });
 
         if (_selectedDelayMinutes != null) {
-          // confirm and call API
           final aksiyon = "${_selectedDelayMinutes}_dk";
           final confirm = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text("Onay"),
-              content: Text("$minutes dakika ertelesin mi?"),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1976D2).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.schedule_rounded, color: Color(0xFF1976D2)),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text("Erteleme Onayı"),
+                ],
+              ),
+              content: Text("Sıranızı $minutes dakika ertelemek istiyor musunuz?"),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Hayır")),
-                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Evet")),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text("Hayır"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1976D2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text("Evet, Ertele"),
+                ),
               ],
             ),
           );
@@ -557,52 +629,98 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
           if (confirm == true) {
             await _erteleBilet(aksiyon);
           } else {
-            // kullanıcı onaylamadı, seçim kaldırılsın
             setState(() {
               _selectedDelayMinutes = null;
             });
           }
         }
       },
-      child: _isErteleLoading ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text("$minutes dk"),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          gradient: selected 
+              ? const LinearGradient(colors: [Color(0xFF1976D2), Color(0xFF42A5F5)])
+              : null,
+          color: selected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? Colors.transparent : const Color(0xFF1976D2).withOpacity(0.25),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: _isErteleLoading && _selectedDelayMinutes == minutes
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text(
+                  "$minutes dk",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: selected ? Colors.white : const Color(0xFF1976D2),
+                  ),
+                ),
+        ),
+      ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // Compact stat card
+  Widget _buildModernStatCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.grey, fontSize: 16),
-            ),
+          Text(
+            value,
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              textAlign: TextAlign.right,
-            ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: Color(0xFF7F8C8D), fontWeight: FontWeight.w500),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatColumn(String label, String value) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: kPrimaryColor)),
-      ],
+  // Compact info row
+  Widget _buildModernInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F7FA),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFF7F8C8D), size: 16),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 55,
+            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF7F8C8D))),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
