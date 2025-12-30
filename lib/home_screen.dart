@@ -1,11 +1,10 @@
 // home_screen.dart
 // Queue Tracking Entry Screen for Hospital Appointment App
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'app_theme.dart';
 import 'main.dart'; // For SiraTakipScreen and KayitScreen
+import 'api.dart'; // For Api class
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QUEUE TRACKING ENTRY SCREEN
@@ -39,51 +38,37 @@ class _QueueTrackingEntryScreenState extends State<QueueTrackingEntryScreen> {
 
     setState(() => _isLoading = true);
 
-    final String apiUrl = "http://10.0.2.2:8000/api/biletler/takip/";
-    final body = jsonEncode({
-      "telefon": _telefonController.text.replaceAll(RegExp(r'[^\d]'), ''),
-      "baglantikodu": _siraKoduController.text,
-    });
+    final result = await Api.trackQueue(
+      phone: _telefonController.text,
+      code: _siraKoduController.text,
+    );
 
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: body,
-      );
+    if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        
-        if (!mounted) return;
-        
-        final biletDetay = data['bilet_detay'] ?? {};
-        final biletId = biletDetay['biletid'] ?? 0;
-        final bolumAdi = biletDetay['bolum_adi']?.toString() ?? 'Bilinmiyor';
-        final baglantiKodu = _siraKoduController.text;
+    if (result.success && result.data != null) {
+      final data = result.data!;
+      final biletDetay = data['bilet_detay'] ?? data;
+      final biletId = biletDetay['biletid'] ?? 0;
+      final bolumAdi = biletDetay['bolum_adi']?.toString() ?? 'Bilinmiyor';
+      final baglantiKodu = _siraKoduController.text;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SiraTakipScreen(
-              biletDetay: biletDetay,
-              biletId: biletId,
-              bolumAdi: bolumAdi,
-              baglantiKodu: baglantiKodu,
-            ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SiraTakipScreen(
+            biletDetay: biletDetay,
+            biletId: biletId,
+            bolumAdi: bolumAdi,
+            baglantiKodu: baglantiKodu,
           ),
-        );
-      } else if (response.statusCode == 404) {
-        _showError("Bilet bulunamadı. Kodunuzu kontrol edin.");
-      } else {
-        _showError("Sunucu hatası: ${response.statusCode}");
-      }
-    } catch (e) {
-      _showError("Bağlantı hatası: ${e.toString()}");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+        ),
+      );
+    } else {
+      _showError(result.errorMessage ?? "Bilinmeyen hata");
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 

@@ -1,12 +1,11 @@
 // main.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'chat_screen.dart';
 import 'game_screen.dart';
 import 'app_theme.dart';
 import 'home_screen.dart';
+import 'api.dart';
 
 void main() {
   runApp(const MyApp());
@@ -59,77 +58,60 @@ class _GirisScreenState extends State<GirisScreen> {
       _isLoading = true;
     });
 
-    try {
-      final String apiUrl = "http://10.0.2.2:8000/api/biletler/takip/";
-      final body = jsonEncode({
-        "baglantikodu": _siraKoduController.text,
-        "telefon": _telefonController.text
-      });
+    final result = await Api.trackQueue(
+      phone: _telefonController.text,
+      code: _siraKoduController.text,
+    );
 
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: body,
-      );
+    if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        if (data == null || data is! Map<String, dynamic>) {
-          _showError("Sunucudan beklenmeyen veri alındı.");
-          return;
-        }
-
-        if (!data.containsKey('biletid')) {
-          _showError("Sunucudan 'biletid' alınamadı.");
-          return;
-        }
-        if (!data.containsKey('bolum_adi')) {
-          _showError("Sunucudan 'bolum_adi' alınamadı.");
-          return;
-        }
-
-        final int biletId = (data['biletid'] is int) ? data['biletid'] : int.tryParse("${data['biletid']}") ?? 0;
-        final String bolumAdi = "${data['bolum_adi']}";
-
-        final Map<String, dynamic> biletDetay = {
-          "durum": data['durum'] ?? "Bilinmiyor",
-          "sizin_numaraniz": data['sizin_numaraniz'] ?? 0,
-          "mevcut_sira": data['mevcut_sira'] ?? 0,
-          "kalan_hasta": data['kalan_hasta'] ?? 0,
-          "doktor_adi": data['doktor_adi'] ?? "-",
-          "tahmini_bekleme_suresi": data['tahmini_bekleme_suresi'] ?? "-",
-          "giris_zamani": data['giris_zamani'] ?? DateTime.now().toIso8601String(),
-          "hastaid": (data['hastaid'] is int) ? data['hastaid'] : int.tryParse("${data['hastaid']}") ?? 0,
-        };
-
-        if (!mounted) return;
-        // --- اینجا baglantiKodu رو هم می‌فرستیم تا دکمه‌های Ertele بتونن ازش استفاده کنن
-        final String baglantiKodu = _siraKoduController.text.trim();
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SiraTakipScreen(
-              biletDetay: biletDetay,
-              biletId: biletId,
-              bolumAdi: bolumAdi,
-              baglantiKodu: baglantiKodu,
-            ),
-          ),
-        );
-      } else if (response.statusCode == 404) {
-        _showError("Bu koda ait aktif bir bilet bulunamadı.");
-      } else if (response.statusCode == 403) {
-        _showError("Telefon numarası bilet ile eşleşmiyor.");
-      } else {
-        _showError("Hata: ${response.statusCode}");
+    if (result.success && result.data != null) {
+      final data = result.data!;
+      
+      if (!data.containsKey('biletid')) {
+        _showError("Sunucudan 'biletid' alınamadı.");
+        setState(() => _isLoading = false);
+        return;
       }
-    } catch (e) {
-      _showError("Bağlantı hatası: ${e.toString()}");
-    } finally {
-      if (mounted) setState(() {
-        _isLoading = false;
-      });
+      if (!data.containsKey('bolum_adi')) {
+        _showError("Sunucudan 'bolum_adi' alınamadı.");
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final int biletId = (data['biletid'] is int) ? data['biletid'] : int.tryParse("${data['biletid']}") ?? 0;
+      final String bolumAdi = "${data['bolum_adi']}";
+
+      final Map<String, dynamic> biletDetay = {
+        "durum": data['durum'] ?? "Bilinmiyor",
+        "sizin_numaraniz": data['sizin_numaraniz'] ?? 0,
+        "mevcut_sira": data['mevcut_sira'] ?? 0,
+        "kalan_hasta": data['kalan_hasta'] ?? 0,
+        "doktor_adi": data['doktor_adi'] ?? "-",
+        "tahmini_bekleme_suresi": data['tahmini_bekleme_suresi'] ?? "-",
+        "giris_zamani": data['giris_zamani'] ?? DateTime.now().toIso8601String(),
+        "hastaid": (data['hastaid'] is int) ? data['hastaid'] : int.tryParse("${data['hastaid']}") ?? 0,
+      };
+
+      final String baglantiKodu = _siraKoduController.text.trim();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SiraTakipScreen(
+            biletDetay: biletDetay,
+            biletId: biletId,
+            bolumAdi: bolumAdi,
+            baglantiKodu: baglantiKodu,
+          ),
+        ),
+      );
+    } else {
+      _showError(result.errorMessage ?? "Bilinmeyen hata");
     }
+
+    if (mounted) setState(() {
+      _isLoading = false;
+    });
   }
 
   void _navigateToKayit() {
@@ -250,7 +232,7 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
   int? _selectedDelayMinutes;
   bool _isErteleLoading = false;
 
-  // تابعی که درخواست POST به API ertele می‌فرستد
+  // Bilet erteleme işlemi
   Future<void> _erteleBilet(String aksiyon) async {
     if (_isErteleLoading) return;
 
@@ -258,55 +240,29 @@ class _SiraTakipScreenState extends State<SiraTakipScreen> {
       _isErteleLoading = true;
     });
 
-    final String apiUrl = "http://10.0.2.2:8000/api/biletler/ertele/";
-    final body = jsonEncode({
-      "baglantikodu": widget.baglantiKodu,
-      "aksiyon": aksiyon,
-    });
+    final result = await Api.postponeTicket(
+      code: widget.baglantiKodu,
+      action: aksiyon,
+    );
 
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: body,
-      );
+    if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        // موفقیت — پاسخ سرور را می‌گیریم و پیام می‌دهیم
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        String yeniKod = data['baglantikodu'] ?? widget.baglantiKodu;
-        String mesaj = "İşlem başarılı. Yeni bilet kodu: $yeniKod";
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(mesaj), backgroundColor: Colors.green),
-        );
-        // اگر خواستی صفحه رو رفرش کنی، اینجا انجام بده
-        // برای مثال: بازخوانی صفحه یا برگردوندن data به صفحه قبلی
-      } else if (response.statusCode == 404) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Aktif bilet bulunamadı veya işlem yapılmış."), backgroundColor: Colors.red),
-        );
-      } else if (response.statusCode == 400) {
-        final err = utf8.decode(response.bodyBytes);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Geçersiz işlem: $err"), backgroundColor: Colors.red),
-        );
-      } else {
-        final err = utf8.decode(response.bodyBytes);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sunucu Hatası: ${response.statusCode} - $err"), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (result.success && result.data != null) {
+      String yeniKod = result.data!['baglantikodu'] ?? widget.baglantiKodu;
+      String mesaj = "İşlem başarılı. Yeni bilet kodu: $yeniKod";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Bağlantı hatası: ${e.toString()}"), backgroundColor: Colors.red),
+        SnackBar(content: Text(mesaj), backgroundColor: Colors.green),
       );
-    } finally {
-      if (!mounted) return;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? "Bilinmeyen hata"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    if (mounted) {
       setState(() {
         _isErteleLoading = false;
       });
@@ -734,7 +690,6 @@ class KayitScreen extends StatefulWidget {
 }
 
 class _KayitScreenState extends State<KayitScreen> {
-  final String baseUrl = "http://10.0.2.2:8000/api/hastalar/";
   final TextEditingController _adsoyadController = TextEditingController();
   final TextEditingController _tcController = TextEditingController();
   final TextEditingController _dogumController = TextEditingController();
@@ -786,43 +741,31 @@ class _KayitScreenState extends State<KayitScreen> {
       _isLoading = true;
     });
 
-    try {
-      Map<String, dynamic> requestBody = {
-        "adsoyad": _adsoyadController.text,
-        "tckimlik": _tcController.text,
-        "sifre": _sifreController.text,
-        "telefon": _telefonController.text,
-        "dogumtarihi": _dogumController.text,
-      };
-      if (_emailController.text.isNotEmpty) {
-        requestBody["email"] = _emailController.text;
-      }
-      final body = jsonEncode(requestBody);
-
-      final response = await http.post(
-        Uri.parse(baseUrl),
-        headers: {"Content-Type": "application/json"},
-        body: body,
-      );
-
-      if (response.statusCode == 200) {
-        _showSuccess("Kayıt başarılı!");
-        _temizle();
-      } else if (response.statusCode == 400) {
-        final error = jsonDecode(utf8.decode(response.bodyBytes));
-        _showError(error['detail'] ?? "Hata 400");
-      } else if (response.statusCode == 422) {
-        _showError("Veri doğrulama hatası. (error 422)");
-      } else {
-        _showError("Kayıt başarısız: ${response.statusCode}");
-      }
-    } catch (e) {
-      _showError("Bağlantı hatası: ${e.toString()}");
-    } finally {
-      if (mounted) setState(() {
-        _isLoading = false;
-      });
+    Map<String, dynamic> requestBody = {
+      "adsoyad": _adsoyadController.text,
+      "tckimlik": _tcController.text,
+      "sifre": _sifreController.text,
+      "telefon": _telefonController.text,
+      "dogumtarihi": _dogumController.text,
+    };
+    if (_emailController.text.isNotEmpty) {
+      requestBody["email"] = _emailController.text;
     }
+
+    final result = await Api.registerPatient(data: requestBody);
+
+    if (!mounted) return;
+
+    if (result.success) {
+      _showSuccess("Kayıt başarılı!");
+      _temizle();
+    } else {
+      _showError(result.errorMessage ?? "Kayıt başarısız");
+    }
+
+    if (mounted) setState(() {
+      _isLoading = false;
+    });
   }
 
   void _temizle() {

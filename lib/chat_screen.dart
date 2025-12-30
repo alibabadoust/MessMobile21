@@ -1,9 +1,8 @@
 // lib/chat_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'main.dart'; // kPrimaryColor için
+import 'api.dart'; // Api class için
 
 // =================================================================
 // API anahtarınızı buraya yerleştirin
@@ -258,24 +257,14 @@ Lütfen Türkçe cevap ver ve profesyonel ol.
   }
 
   Future<bool> _saveSummaryToBackend(String aiOzet) async {
-    try {
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/api/formlar/"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "biletid": widget.biletId,
-          "ai_ozet": aiOzet,
-          "formverisi_json": {
-            "answers": _answers,
-            "full_conversation": _messages
-          }
-        }),
-      );
-
-      return response.statusCode == 200;
-    } catch (e) {
-      return false;
-    }
+    return await Api.saveAiSummary(
+      biletId: widget.biletId,
+      summary: aiOzet,
+      details: {
+        "answers": _answers,
+        "full_conversation": _messages
+      },
+    );
   }
 
   void _scrollToBottom() {
